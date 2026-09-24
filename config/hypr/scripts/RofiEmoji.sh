@@ -6,6 +6,9 @@
 #  SPDX-License-Identifier: GPL-3.0-or-later
 # ==================================================
 
+# Dependencies: bash, coreutils (mkdir/mktemp/mv/touch/sort/cut), sed, awk,
+#   procps (pidof/pkill), util-linux (flock), rofi, wl-clipboard (wl-copy)
+
 # Variables
 rofi_theme="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/rofi/config-emoji.rasi"
 msg='** note ** 👀 Click or Return to choose || Ctrl V to Paste'
