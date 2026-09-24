@@ -59,14 +59,30 @@ bump_usage() {
   } 9>"${usage_file}.lock"
 }
 
-choice="$(printf '%s\n' "$sorted" | rofi -i -dmenu -mesg "$msg" -config "$rofi_theme" | head -n 1)"
+# Ask rofi for "<0-based row index><TAB><typed filter>". A real row is
+# reported with index 0..N-1; a hand-typed custom entry with index -1
+# (rofi passes UINT32_MAX through an int). Esc/cancel returns nothing.
+output="$(printf '%s\n' "$sorted" | rofi -i -dmenu -format $'i\tf' -mesg "$msg" -config "$rofi_theme")"
 
-if [ -n "$choice" ]; then
-  # Only track selections that exist in the list (ignore custom typed text)
-  if printf '%s\n' "$data" | grep -qxF -- "$choice"; then
-    bump_usage "$(awk '{print $1}' <<< "$choice")"
+if [ -n "$output" ]; then
+  idx="${output%%$'\t'*}"
+  filter="${output#*$'\t'}"
+  line=""
+  case "$idx" in
+    ''|*[!0-9]*) ;; # -1 or malformed: custom entry, not a row
+    *) line="$(printf '%s\n' "$sorted" | sed -n "$((idx + 1))p")" ;;
+  esac
+
+  if [ -n "$line" ]; then
+    # Real row from the list: count the pick, then copy its emoji
+    emoji="$(awk '{print $1}' <<< "$line")"
+    bump_usage "$emoji"
+    printf '%s' "$emoji" | wl-copy
+  elif [ -n "$filter" ]; then
+    # Hand-typed custom text: copy it (first word, as before) but
+    # never track it, so the history only holds real list rows
+    printf '%s' "$(awk '{print $1}' <<< "$filter")" | wl-copy
   fi
-  printf '%s' "$(awk '{print $1}' <<< "$choice")" | wl-copy
 fi
 
 exit
