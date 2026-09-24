@@ -40,7 +40,9 @@ bump_usage() {
   local emoji="$1" tmp
   mkdir -p "${usage_file%/*}"
   touch "$usage_file"
-  tmp="$(mktemp)"
+  # Temp file next to the destination so mv is an atomic rename(2)
+  # even when /tmp lives on a different filesystem (e.g. tmpfs)
+  tmp="$(mktemp "${usage_file}.XXXXXX")"
   awk -v e="$emoji" '
     BEGIN { FS = "\t" }
     $1 == e { print $1 "\t" ($2 + 1); found = 1; next }
