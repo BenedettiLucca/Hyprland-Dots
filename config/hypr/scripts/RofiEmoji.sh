@@ -35,21 +35,28 @@ sorted="$(printf '%s\n' "$data" | awk -v uf="$usage_file" '
   NF { print (count[$1] + 0) "\t" $0 }
 ' | LC_ALL=C sort -s -k1,1nr | cut -f2-)"
 
-# Increment the counter for a picked emoji
+# Increment the counter for a picked emoji. flock serializes the whole
+# read -> increment -> rename sequence so two concurrent picks can't both
+# read the same count and lose an update (the atomic rename alone only
+# prevents a torn file, not a lost update). The lock is released by the
+# kernel when the fd closes, even if the script dies.
 bump_usage() {
   local emoji="$1" tmp
   mkdir -p "${usage_file%/*}"
   touch "$usage_file"
-  # Temp file next to the destination so mv is an atomic rename(2)
-  # even when /tmp lives on a different filesystem (e.g. tmpfs)
-  tmp="$(mktemp "${usage_file}.XXXXXX")"
-  awk -v e="$emoji" '
-    BEGIN { FS = "\t" }
-    $1 == e { print $1 "\t" ($2 + 1); found = 1; next }
-    { print }
-    END { if (!found) print e "\t1" }
-  ' "$usage_file" > "$tmp"
-  mv "$tmp" "$usage_file"
+  {
+    flock -x 9
+    # Temp file next to the destination so mv is an atomic rename(2)
+    # even when /tmp lives on a different filesystem (e.g. tmpfs)
+    tmp="$(mktemp "${usage_file}.XXXXXX")"
+    awk -v e="$emoji" '
+      BEGIN { FS = "\t" }
+      $1 == e { print $1 "\t" ($2 + 1); found = 1; next }
+      { print }
+      END { if (!found) print e "\t1" }
+    ' "$usage_file" > "$tmp"
+    mv "$tmp" "$usage_file"
+  } 9>"${usage_file}.lock"
 }
 
 choice="$(printf '%s\n' "$sorted" | rofi -i -dmenu -mesg "$msg" -config "$rofi_theme" | head -n 1)"
